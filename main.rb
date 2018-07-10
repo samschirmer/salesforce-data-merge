@@ -37,18 +37,19 @@ end
 
 contacts = Array.new
 files.each do |file|
-	CSV.foreach(File.path(file), headers: true, header_converters: :symbol) do |row|
+	CSV.foreach(File.path(file), headers: true, header_converters: :symbol, encoding: 'ISO-8859-1:UTF-8') do |row|
 		c = Contact.new(row, file)
 		contacts.push(c) unless c.record[:isconverted].to_i == 1 && c.entity_type == 'lead'
 	end
 end
 
 # merging in account data
-CSV.foreach(File.path('./Account.csv'), headers: true, header_converters: :symbol) do |row|
+CSV.foreach(File.path('./Account.csv'), headers: true, header_converters: :symbol, encoding: 'ISO-8859-1:UTF-8') do |row|
 	contacts.select { |c| c.record[:accountid] == row[:id] }.each do |c|
 		row.each do |col,v|
 			col = :accountid if	col == :id 
 			col = :accounttype if col == :type
+			col = :accountcreateddate if col == :createddate
 			c.record[col] = v 
 		end
 	end
