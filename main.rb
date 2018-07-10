@@ -4,6 +4,7 @@ files = ['./Lead.csv', './Contact.csv']
 
 class Contact
 	attr_accessor :entity_type, :record
+
 	def initialize(r, file)
 		file == './Lead.csv' ? @entity_type = 'lead' : @entity_type = 'contact'
 		# sf gives mailing addresses to contacts, not leads; merging them back together
@@ -25,16 +26,19 @@ class Contact
 		@record = r
 	end
 
-	def get_cols
+	def self.get_cols(contacts)
 		blacklist = [	
 			:mailingstreet, :mailingcity, :mailingstate, :mailingpostalcode, :mailingcountry, # because of merge in init
 			:mailingstatecode, :mailingcountrycode, :statecode, :countrycode, :othercountrycode, :otherstatecode,
 			:billingstatecode, :billingcountrycode, :shippingstatecode, :shippingcountrycode
 		]
-		return @record.headers - blacklist
+		lead_cols = contacts.select { |c| c.entity_type == 'lead' }.first.record.headers - blacklist
+		contact_cols = contacts.select { |c| c.entity_type == 'contact' }.first.record.headers - blacklist
+		return (lead_cols + contact_cols).uniq
 	end
 end
 
+# creating array of Contact objects from Contact and Lead files -- ignoring converted leads
 contacts = Array.new
 files.each do |file|
 	CSV.foreach(File.path(file), headers: true, header_converters: :symbol, encoding: 'ISO-8859-1:UTF-8') do |row|
@@ -46,22 +50,20 @@ end
 # merging in account data
 CSV.foreach(File.path('./Account.csv'), headers: true, header_converters: :symbol, encoding: 'ISO-8859-1:UTF-8') do |row|
 	contacts.select { |c| c.record[:accountid] == row[:id] }.each do |c|
-		row.each do |col,v|
+		row.each do |col,val|
+			# overriding a few duplicate column names to prevent losing data
 			col = :accountid if	col == :id 
 			col = :accounttype if col == :type
 			col = :accountcreateddate if col == :createddate
-			c.record[col] = v 
+			col = :accountname if col == :name
+			c.record[col] = val 
 		end
 	end
 end
 
-lead_cols = contacts.select { |c| c.entity_type == 'lead' }.first.get_cols
-contact_cols = contacts.select { |c| c.entity_type == 'contact' }.first.get_cols
-columns = (lead_cols + contact_cols).uniq
-
-# write to database table at this point
+columns = Contact.get_cols(contacts)
+puts columns;
 new_csv = CSV.open('./merged_data.csv', 'w', write_headers: true, headers: columns.push('entitytype'))
-
 contacts.each do |c|
 	row = Hash.new
 	row['entitytype'] = c.entity_type
