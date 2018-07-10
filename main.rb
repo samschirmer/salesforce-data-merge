@@ -4,9 +4,9 @@ class Contact
 	attr_accessor :type, :record
 
 	def initialize(r, file)
-		file == './leads.csv' ? @type = 'lead' : @type = 'contact'
+		file == './Lead.csv' ? @type = 'lead' : @type = 'contact'
 		# sf gives mailing addresses to contacts, not leads; merging them back together
-		if @type == 'contact'
+		unless @type == 'lead'
 			if r[:street].nil? and r[:city].nil? and r[:state].nil? and r[:postalcode].nil?
 				r[:street] = r[:mailingstreet]
 				r[:city] = r[:mailingcity]	
@@ -34,7 +34,7 @@ class Contact
 	end
 end
 
-files = ['./leads.csv', './contacts.csv']
+files = ['./Lead.csv', './Contact.csv']
 contacts = Array.new
 files.each do |file|
 	CSV.foreach(File.path(file), headers: true, header_converters: :symbol) do |row|
