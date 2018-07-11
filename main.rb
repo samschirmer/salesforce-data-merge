@@ -1,6 +1,11 @@
 require 'csv'
 
 files = ['./Lead.csv', './Contact.csv']
+column_blacklist = [	
+	:mailingstreet, :mailingcity, :mailingstate, :mailingpostalcode, :mailingcountry, # because of merge in init
+	:mailingstatecode, :mailingcountrycode, :statecode, :countrycode, :othercountrycode, :otherstatecode,
+	:billingstatecode, :billingcountrycode, :shippingstatecode, :shippingcountrycode
+]
 
 class Contact
 	attr_accessor :entity_type, :record
@@ -26,15 +31,16 @@ class Contact
 		@record = r
 	end
 
-	def self.get_cols(contacts)
-		blacklist = [	
-			:mailingstreet, :mailingcity, :mailingstate, :mailingpostalcode, :mailingcountry, # because of merge in init
-			:mailingstatecode, :mailingcountrycode, :statecode, :countrycode, :othercountrycode, :otherstatecode,
-			:billingstatecode, :billingcountrycode, :shippingstatecode, :shippingcountrycode
-		]
-		lead_cols = contacts.select { |c| c.entity_type == 'lead' }.first.record.headers - blacklist
-		contact_cols = contacts.select { |c| c.entity_type == 'contact' }.first.record.headers - blacklist
-		return (lead_cols + contact_cols).uniq
+	def self.get_cols(contacts, blacklist)
+		# contact_cols includes account columns
+		lead_cols = contacts.select { |c| c.entity_type == 'lead' }.first.record.headers
+		contact_cols = contacts.select { |c| c.entity_type == 'contact' }.first.record.headers
+		cols = (lead_cols + contact_cols).uniq
+		# blacklisting empty columns
+		cols.each do |col|
+			blacklist.push(col) unless contacts.select { |c| !c.record[col].nil? }.first
+		end
+		return cols - blacklist
 	end
 end
 
@@ -47,7 +53,7 @@ files.each do |file|
 	end
 end
 
-# merging in account data
+# merging in account data on account.id == contact.accountid
 CSV.foreach(File.path('./Account.csv'), headers: true, header_converters: :symbol, encoding: 'ISO-8859-1:UTF-8') do |row|
 	contacts.select { |c| c.record[:accountid] == row[:id] }.each do |c|
 		row.each do |col,val|
@@ -55,18 +61,18 @@ CSV.foreach(File.path('./Account.csv'), headers: true, header_converters: :symbo
 			col = :accountid if	col == :id 
 			col = :accounttype if col == :type
 			col = :accountcreateddate if col == :createddate
-			col = :accountname if col == :name
+			col = :company if col == :name
 			c.record[col] = val 
 		end
 	end
 end
 
-columns = Contact.get_cols(contacts)
-puts columns;
-new_csv = CSV.open('./merged_data.csv', 'w', write_headers: true, headers: columns.push('entitytype'))
+# getting list of columns and writing contact records to csv
+columns = Contact.get_cols(contacts, column_blacklist)
+new_csv = CSV.open('./merged_data.csv', 'w', write_headers: true, headers: columns.push(:entitytype))
 contacts.each do |c|
 	row = Hash.new
-	row['entitytype'] = c.entity_type
+	row[:entitytype] = c.entity_type
 	columns.each do |col|
 		row[col] = c.record[col] unless c.record[col].nil? || c.record[col] == '[not provided]'
 	end
